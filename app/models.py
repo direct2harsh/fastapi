@@ -4,8 +4,8 @@ from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from .database import Base
 
-
-class Posts(Base):
+# This Base is from the sqlalchemy which is used to access the database
+class Post(Base):
     __tablename__ = "posts"
     id = Column(Integer,primary_key = True,nullable=False)
     title = Column(String,nullable= False)
