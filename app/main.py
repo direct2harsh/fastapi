@@ -1,11 +1,12 @@
-from fastapi import FastAPI,Response,status, Depends 
+from fastapi import FastAPI,Response,status, Depends
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from pydantic import BaseModel
+from . import schemas
 from fastapi import HTTPException
 from . import models
 from .database import engine,get_db
 from sqlalchemy.orm import Session
+from typing import List
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -25,13 +26,9 @@ except Exception as error:
     print(error) 
 
 
-# This post is from pydentic model used to make the code typesafe 
-class Post(BaseModel):
-    title : str
-    content :str
-    published : bool = True
 
-@myApp.get('/posts',status_code=status.HTTP_200_OK)
+# Remember when using response model as list the bracket is sqaure [] 
+@myApp.get('/posts',status_code=status.HTTP_200_OK,response_model=List[schemas.PostResponse])
 # db is object of database session used to do operation in the db 
 
 def getPosts(db: Session=Depends(get_db)):
@@ -45,7 +42,7 @@ def getPosts(db: Session=Depends(get_db)):
     return posts
 
 
-@myApp.get('/posts/{id}',status_code=status.HTTP_200_OK)
+@myApp.get('/posts/{id}',status_code=status.HTTP_200_OK,response_model=schemas.PostResponse)
 # db is object of database session used to do operation in the db 
 
 def getPosts(id:int,db: Session=Depends(get_db)):
@@ -68,8 +65,8 @@ def getPosts(id:int,db: Session=Depends(get_db)):
 
 
 
-@myApp.post('/addpost',status_code=status.HTTP_201_CREATED)
-def addPost(post: Post,db:Session = Depends(get_db)):
+@myApp.post('/addpost',status_code=status.HTTP_201_CREATED,response_model=schemas.PostResponse)
+def addPost(post:schemas.CreatePost,db:Session = Depends(get_db)):
     #Raw query
     # cursor.execute("""insert into posts (title,content,published) values (%s, %s, %s ) RETURNING * """,
     #                 (post.title,post.content , post.published)) 
@@ -101,8 +98,8 @@ def deletePost(id:int,db:Session= Depends(get_db)):
     return Response(status_code=status.HTTP_204_NO_CONTENT)
    
 
-@myApp.put("/update/{id}",status_code=status.HTTP_200_OK)
-def updatePost(id:int,post:Post,db:Session=Depends(get_db)):
+@myApp.put("/update/{id}",status_code=status.HTTP_200_OK,response_model=schemas.PostResponse)
+def updatePost(id:int,post:schemas.CreatePost,db:Session=Depends(get_db)):
     # cursor.execute("""update posts set content = %s, title = %s where id = %s returning *""",(post.content,post.title,(str(id))))
     # data = cursor.fetchone()
     # conn.commit()
@@ -118,3 +115,21 @@ def updatePost(id:int,post:Post,db:Session=Depends(get_db)):
     put.update(post.dict())
     db.commit()
     return put.first()
+
+
+
+@myApp.post("/createuser",status_code=status.HTTP_201_CREATED,response_model=schemas.UserResponse)
+def createUser(user:schemas.UserCreate ,db:Session=Depends(get_db)):
+    new_user = models.User(**user.dict())
+    #when using filter by the LHS value is colum name and right side is the value to find in the colum
+    # when usning filer the LHS should be the column name using models == value to compare
+    # data = db.query(models.User).filter(models.user.email == user.email)
+    data = db.query(models.User).filter_by(email = user.email)
+    
+    if data!=None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail=f"The email id already exits")
+    db.add(new_user)
+    db.commit()
+    # refresh is alchemy way of retruning * 
+    db.refresh(new_user)
+    return new_user
